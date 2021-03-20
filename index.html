@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Pong</title>
+    </head>
+    <body style="background-color:#b5b8c7">
+        <canvas id="myCanvas" width="550" height="400" style="background-color:#000000;display:block;margin:0 auto"></canvas>
+        <script>
+            // defines the font
+            let myFont = new FontFace(
+                "press-start-2p",
+                "url(https://fonts.gstatic.com/s/pressstart2p/v9/e3t4euO8T-267oIAQAu6jDQyK3nVivM.woff2)"
+            );
+           
+            var canvas = document.getElementById("myCanvas");
+            var ctx = canvas.getContext("2d");
+            
+            var start_wait = 3; // the number of seconds to count down when the game starts
+            start_wait = start_wait * 1000; // convert the seconds to milliseconds
+            var selected_mode;
+            var game_mode;
+            var selected_difficulty;
+            var difficulty_level;
+            var in_game;
+            var waiting;
+            var game_start;
+            var game_over;
+            var last_scorer;
+
+            var player_speed = 3;
+
+            var player_width = 15;
+            var player_height = 75;
+            var player_wallDistance = 15; // the distance that each player is from the edge
+
+            var wall_size = 10; // the height of the top and bottom lines
+
+            function PlayerDataTemplate(x) {
+                this.x = x;
+                this.y = (canvas.height / 2) - (player_height / 2);
+                this.ready = false;
+                this.ai = false;
+                this.score = 0;
+                this.controls = {
+                    up: false,
+                    down: false
+                };
+                this.isTouchingBall = function() {
+                    return (
+                        (this.x + player_width >= ball.x && this.x <= ball.x + ball.size) &&
+                        (this.y + player_height >= ball.y && this.y <= ball.y + ball.size)
+                    )
+                };
+                this.updatePosition = function() {
+                    if (this.controls.up == true) {
+                        this.y -= player_speed;
+                        if (this.y < wall_size) {
+                            this.y = wall_size;
+                        }
+                    } else if (this.controls.down == true) {
+                        this.y += player_speed;
+                        if (this.y + player_height > canvas.height-wall_size) {
+                            this.y = canvas.height-wall_size-player_height;
+                        }
+                    }
+                }
+                this.draw = function() {
+                    ctx.fillStyle = "#ffffff";
+                    ctx.fillRect(this.x, this.y, player_width, player_height);
+                }
+            };
+
+            var player1;
+            var player2;
+
+            var ball = {
+                size: 15,
+                x: 0,
+                y: 0,
+                dx: 5,
+                dy: getRandomArbitrary(-2, 2),
+                updatePosition: function() {
+                    this.x += this.dx;
+                    this.y += this.dy;
+
+                    if (this.y <= wall_size) {
+                        this.dy = Math.abs(this.dy);
+                    } else if (this.y+this.size >= canvas.height-wall_size) {
+                        this.dy = -Math.abs(this.dy);
+                    }
+                    
+                    if (player1.isTouchingBall()) {
+                        this.dx = 5 * (this.dx / Math.abs(this.dx));
+                        if (this.x >= player_wallDistance+player_width+this.dx) {
+                            this.dx = -this.dx;
+                            var ball_location = ball.y+(ball.size/2);
+                            var player_location = player1.y+(player_height/2);
+                            if (ball_location < player_location) {
+                                this.dy = -Math.abs(this.dy)+getRandomArbitrary(-1,1);
+                            } else if (ball_location > player_location) {
+                                this.dy = Math.abs(this.dy)+getRandomArbitrary(-1, 1);
+                            } else {
+                                this.dy = -this.dy;
+                            }
+                        } else if (this.y+this.size <= player1.y+this.dy) {
+                            this.dy = -Math.abs(this.dy);
+                        } else if (this.y >= player1.y+player_height+this.dy) {
+                            this.dy = Math.abs(this.dy);
+                        }
+                    }
+
+                    if (player2.isTouchingBall()) {
+                        this.dx = 5 * (this.dx / Math.abs(this.dx));
+                        if (this.x+this.size <= canvas.width-player_wallDistance-player_width+this.dx) {
+                            this.dx = -this.dx;
+                            var ball_location = ball.y+(ball.size/2);
+                            var player_location = player2.y+(player_height/2);
+                            if (ball_location < player_location) {
+                                this.dy = -Math.abs(this.dy);
+                            } else if (ball_location > player_location) {
+                                this.dy = Math.abs(this.dy);
+                            } else {
+                                this.dy = -this.dy;
+                            }
+                        } else if (this.y+this.size <= player2.y+this.dy) {
+                            this.dy = -Math.abs(this.dy);
+                        } else if (this.y >= player2.y+player_height+this.dy) {
+                            this.dy = Math.abs(this.dy);
+                        }
+                    }
+                },
+                draw: function() {
+                    ctx.fillStyle = "#ffffff";
+                    ctx.fillRect(this.x, this.y, this.size, this.size);
+                },
+                spawn: function() {
+                    this.x = canvas.width/2 - this.size/2;
+                    this.y = canvas.height/2 - this.size/2;
+
+                    if (last_scorer == 2) {
+                        this.dx = 2;
+                    } else {
+                        this.dx = -2;
+                    }
+
+                    this.dy = getRandomArbitrary(-2, 2);
+                }
+            }
+
+            function resetVariables() {
+                selected_mode = null;
+                game_mode = null;
+                difficulty_level = null;
+                selected_difficulty = null;
+                in_game = false;
+                game_over = false;
+                waiting = false;
+                game_start = null;
+                last_scorer = null;
+                last_player_id = null;
+                player1 = new PlayerDataTemplate(player_wallDistance);
+                player2 = new PlayerDataTemplate(canvas.width - player_wallDistance - player_width);
+                ball.spawn();
+            }
+
+            resetVariables();
+
+            // getRandomInt and getRandomArbitrary from https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/random
+            function getRandomInt(min, max) {
+                min = Math.ceil(min);
+                max = Math.floor(max);
+                return Math.floor(Math.random() * (max - min) + min);
+            }
+
+            function getRandomArbitrary(min, max) {
+                return Math.random() * (max - min) + min;
+            }
+
+            document.addEventListener("keydown", keyDownHandler);
+            document.addEventListener("keyup", keyUpHandler);
+
+            function keyDownHandler(e) {
+                if (selected_mode == null) {
+                    if (e.key == "1") {
+                        selected_mode = 1;
+                    } else if (e.key == "2") {
+                        selected_mode = 2;
+                    }
+                    setTimeout(function() {
+                        game_mode = selected_mode;
+                    }, 1000);
+                } else if (game_mode == 1 && selected_difficulty == null) {
+                    if (e.key == "1") {
+                        selected_difficulty = 1;
+                    } else if (e.key == "2") {
+                        selected_difficulty = 2;
+                    } else if (e.key == "3") {
+                        selected_difficulty = 3;
+                    }
+                    setTimeout(function() {
+                        difficulty_level = selected_difficulty;
+                    }, 1000);
+                } else if (e.key.toLowerCase() == "w") {
+                    if (player1.ai == false) {
+                        player1.controls.up = true;
+                    }
+                    if (in_game == false && game_mode != null) {
+                        player1.ready = true;
+                    }
+                } else if (e.key.toLowerCase() == "s") {
+                    if (player1.ai == false) {
+                        player1.controls.down = true;
+                    }
+                    if (in_game == false && !(player1.ready == true && player2.ready == true)) {
+                        player1.ready = false;
+                    }
+                } else if (e.key == "ArrowUp") {
+                    if (player2.ai == false) {
+                        player2.controls.up = true;
+                    }
+                    if (in_game == false && game_mode != null) {
+                        player2.ready = true;
+                    }
+                } else if (e.key == "ArrowDown") {
+                    if (player2.ai == false) {
+                        player2.controls.down = true;
+                    }
+                    if (in_game == false && !(player1.ready == true && player2.ready == true)) {
+                        player2.ready = false;
+                    }
+                } else if (e.key == " " && game_over == true) {
+                    resetVariables();
+                }
+                if (game_mode == 1) {
+                    if (player1.ready == true && player2.ready == false) {
+                        player2.ai = true;
+                        player2.ready = true;
+                    } else if (player2.ready == true && player1.ready == false) {
+                        player1.ai = true;
+                        player1.ready = true;
+                    }
+                }
+                if (in_game == false && waiting == false && player1.ready == true && player2.ready == true) {
+                    waiting = true;
+                    setTimeout(function() {
+                        in_game = true;
+                        game_start = Date.now() + start_wait;
+                    }, 1000)
+                }
+            }
+
+            function keyUpHandler(e) {
+                if (e.key.toLowerCase() == "w") {
+                    player1.controls.up = false;
+                } else if (e.key.toLowerCase() == "s") {
+                    player1.controls.down = false;
+                } else if (e.key == "ArrowUp") {
+                    player2.controls.up = false;
+                } else if (e.key == "ArrowDown") {
+                    player2.controls.down = false;
+                }
+            }
+
+            function draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                ctx.fillStyle = "#ffffff";
+
+                // draw the lines at the top and bottom
+                ctx.fillRect(0, 0, canvas.width, wall_size);
+                ctx.fillRect(0, canvas.height-wall_size, canvas.width, wall_size);
+
+                if (in_game == true) {
+                    player1.draw();
+                    player2.draw();
+
+                    if (game_over == false) {
+                        ball.draw();
+                    }
+
+                    // draw the dotted line down the middle
+                    var line_start = 5;
+                    var line_height = 10;
+                    var line_width = 5;
+                    var line_gap = 10;
+                    for (let i = line_start; i < canvas.height; i += line_height + line_gap) {
+                        ctx.fillRect((canvas.width / 2) - (line_width / 2), i, line_width, line_height);
+                    }
+
+                    // draw the player's scores
+                    var score_gap_wall = 15; // the gap between the score and the wall above the score
+                    var score_gap_dotted = 15; // the gap between the dotted line and the scores
+
+                    ctx.font = '30px press-start-2p';
+                    ctx.fillStyle = "#ffffff";
+                    ctx.textBaseline = "top";
+
+                    function writtenScore(s) {
+                        return ((s <= 9) ? "0" : "") + s;
+                    }
+
+                    ctx.textAlign = "right";
+                    ctx.fillText(writtenScore(player1.score), (canvas.width/2)-(line_width/2)-score_gap_dotted, wall_size+score_gap_wall);
+
+                    ctx.textAlign = "left";
+                    ctx.fillText(writtenScore(player2.score), (canvas.width/2)+(line_width/2)+score_gap_dotted, wall_size+score_gap_wall);
+
+                    var winner_text = "WINNER!";
+                    var winner_gap_wall = 125; // the gap between the winning text and the wall above the text
+                    var winner_gap_dotted = 12; // the gap between the dotted line and the winning text
+                    if (player1.score >= 10) {
+                        ctx.textAlign = "right";
+                        ctx.fillText(winner_text, (canvas.width/2)-(line_width/2)-winner_gap_dotted, wall_size+winner_gap_wall);
+                    } else if (player2.score >= 10) {
+                        ctx.textAlign = "left";
+                        ctx.fillText(winner_text, (canvas.width/2)+(line_width/2)+winner_gap_dotted+10, wall_size+winner_gap_wall);
+                    }
+
+                    if (game_over == true) {
+                        ctx.font = '15px press-start-2p';
+                        ctx.textBaseline = "middle";
+                        ctx.textAlign = "center";
+                        ctx.clearRect(canvas.width/2-line_width, 228, line_width*2, 65);
+                        ctx.fillText("Press SPACE to return", canvas.width/2, 250);
+                        ctx.fillText("to the main menu.", canvas.width/2, 275);
+                    }
+
+                    if (game_start > Date.now()) {
+                        ctx.textBaseline = "middle";
+                        ctx.textAlign = "center";
+
+                        ctx.font = '60px press-start-2p';
+                        ctx.clearRect(canvas.width/2-50, canvas.height/2-50, 100, 100);
+                        ctx.fillText(Math.floor(((game_start - Date.now()) + 1000) / 1000), canvas.width/2, canvas.height/2);
+                    }
+                } else {
+                    ctx.font = '75px press-start-2p';
+                    ctx.fillStyle = "#ffffff";
+                    ctx.textBaseline = "top";
+                    ctx.textAlign = "center";
+
+                    ctx.fillText("Pong", canvas.width/2, 90);
+                    
+                    if (game_mode == null) {
+                        ctx.font = '18px press-start-2p';
+
+                        ctx.textAlign = "middle";
+                        ctx.fillText("Select a game mode:", canvas.width/2, 210);
+
+                        var single_player_text = "[1] Single Player";
+                        var multiplayer_text = "[2] Multiplayer";
+
+                        ctx.font = '15px press-start-2p';
+                        ctx.fillText(single_player_text, canvas.width/2, 245);
+
+                        ctx.textAlign = "left";
+                        ctx.fillText(multiplayer_text, canvas.width/2 - (ctx.measureText(single_player_text).width/2), 270);
+
+                        if (selected_mode == 1) {
+                            ctx.beginPath();
+                            ctx.lineWidth = "3";
+                            ctx.strokeStyle = "#ffffff";
+                            var measured = ctx.measureText(single_player_text);
+                            var height = ctx.measureText("M").width;
+                            ctx.rect(canvas.width/2-measured.width/2-5, 240, measured.width + 10, height + 10);
+                            ctx.stroke();
+                        } else if (selected_mode == 2) {
+                            ctx.beginPath();
+                            ctx.lineWidth = "3";
+                            ctx.strokeStyle = "#ffffff";
+                            var starting_point = canvas.width/2-ctx.measureText(single_player_text).width/2;;
+                            var measured = ctx.measureText(multiplayer_text);
+                            var height = ctx.measureText("M").width;
+                            ctx.rect(starting_point-5, 265, measured.width + 10, height + 10);
+                            ctx.stroke();
+                        }
+                    } else if (game_mode == 1) {
+                        if (difficulty_level == null) {
+                            ctx.font = '18px press-start-2p';
+
+                            ctx.textAlign = "middle";
+                            ctx.fillText("Select a difficulty level:", canvas.width/2, 210);
+
+                            var first_text = "[1] Easy";
+                            var second_text = "[2] Medium";
+                            var third_text = "[3] Hard";
+
+                            var text_start = canvas.width/2 - ctx.measureText(second_text).width/2;
+
+                            ctx.font = '15px press-start-2p';
+                            ctx.textAlign = "left";
+                            ctx.fillText(first_text, text_start, 245);
+                            ctx.fillText(second_text, text_start, 270);
+                            ctx.fillText(third_text, text_start, 295);
+
+                            if (selected_difficulty == 1) {
+                                ctx.beginPath();
+                                ctx.lineWidth = "3";
+                                ctx.strokeStyle = "#ffffff";
+                                var measured = ctx.measureText(first_text);
+                                var height = ctx.measureText("M").width;
+                                ctx.rect(text_start-5, 240, measured.width + 10, height + 10);
+                                ctx.stroke();
+                            } else if (selected_difficulty == 2) {
+                                ctx.beginPath();
+                                ctx.lineWidth = "3";
+                                ctx.strokeStyle = "#ffffff";
+                                var measured = ctx.measureText(second_text);
+                                var height = ctx.measureText("M").width;
+                                ctx.rect(text_start-5, 265, measured.width + 10, height + 10);
+                                ctx.stroke();
+                            } else if (selected_difficulty == 3) {
+                                ctx.beginPath();
+                                ctx.lineWidth = "3";
+                                ctx.strokeStyle = "#ffffff";
+                                var measured = ctx.measureText(third_text);
+                                var height = ctx.measureText("M").width;
+                                ctx.rect(text_start-5, 290, measured.width + 10, height + 10);
+                                ctx.stroke();
+                            }
+                        } else {
+                            ctx.font = '18px press-start-2p';
+
+                            ctx.textAlign = "middle";
+                            ctx.fillText("Select a player:", canvas.width/2, 210);
+
+                            var single_player_text = "[W] Player 1";
+                            var multiplayer_text = "[^] Player 2";
+
+                            ctx.font = '15px press-start-2p';
+                            ctx.fillText(single_player_text, canvas.width/2, 245);
+
+                            ctx.textAlign = "left";
+                            ctx.fillText(multiplayer_text, canvas.width/2 - (ctx.measureText(single_player_text).width/2), 270);
+
+                            if (player1.ready == true && player1.ai == false) {
+                                ctx.beginPath();
+                                ctx.lineWidth = "3";
+                                ctx.strokeStyle = "#ffffff";
+                                var measured = ctx.measureText(single_player_text);
+                                var height = ctx.measureText("M").width;
+                                ctx.rect(canvas.width/2-measured.width/2-5, 240, measured.width + 10, height + 10);
+                                ctx.stroke();
+                            } else if (player2.ready == true && player2.ai == false) {
+                                ctx.beginPath();
+                                ctx.lineWidth = "3";
+                                ctx.strokeStyle = "#ffffff";
+                                var starting_point = canvas.width/2-ctx.measureText(single_player_text).width/2;;
+                                var measured = ctx.measureText(multiplayer_text);
+                                var height = ctx.measureText("M").width;
+                                ctx.rect(starting_point-5, 265, measured.width + 10, height + 10);
+                                ctx.stroke();
+                            }
+                        }
+                    } else if (game_mode == 2) {
+                        ctx.font = '23px press-start-2p';
+
+                        ctx.textAlign = "middle";
+                        ctx.fillText("Player 1", canvas.width/2 - 120, 210);
+
+                        ctx.textAlign = "middle";
+                        ctx.fillText("Player 2", canvas.width/2 + 120, 210);
+
+                        function toReadableStatus(player) {
+                            return player.ready == true ? "Ready!" : "Waiting...";
+                        }
+
+                        ctx.font = "15px press-start-2p";
+                        ctx.fillText(toReadableStatus(player1), canvas.width/2 - 120, 250);
+                        if (player1.ready == false) {
+                            ctx.fillText("(Press W)", canvas.width/2 - 120, 275);
+                        }
+                        ctx.fillText(toReadableStatus(player2), canvas.width/2 + 120, 250);
+                        if (player2.ready == false) {
+                            ctx.fillText("(Press ^)", canvas.width/2 + 120, 275);
+                        }
+                    }
+                }
+            }
+
+            function mainLoop() {
+                if (in_game == true) {
+                    if (ball.x+ball.size < 0) {
+                        player2.score++;
+                        last_scorer = 2;
+                        ball.spawn();
+                    } else if (ball.x > canvas.width) {
+                        player1.score++;
+                        last_scorer = 1;
+                        ball.spawn();
+                    }
+
+                    if (player1.score >= 10 || player2.score >= 10) {
+                        game_over = true;
+                    }
+
+                    player1.updatePosition();
+                    player2.updatePosition();
+
+                    if (game_over == false && game_start <= Date.now()) {
+                        if (waiting == true) {
+                            waiting = false;
+                        }
+
+                        var ai_list = [];
+                        if (player1.ai == true) {
+                            ai_list.push(player1);
+                        }
+                        if (player2.ai == true) {
+                            ai_list.push(player2);
+                        }
+
+                        var ball_y_center = ball.y + (ball.size/2);
+
+                        for (let i = 0; i < ai_list.length; i++) {
+                            var ai = ai_list[i];
+
+                            var player_y_center = ai.y + (player_height/2);
+
+                            var distance = Math.abs(ball.x - (ai.x + player_width));
+                            var preferred_distance;
+                            if (difficulty_level == 1) {
+                                preferred_distance = 25 + ((distance * 2.5) / (Math.abs(ball.dx) + Math.abs(ball.dy)));
+                            } else if (difficulty_level == 2) {
+                                preferred_distance = 15 + ((distance * 2) / (Math.abs(ball.dx) + Math.abs(ball.dy)));
+                            } else if (difficulty_level == 3) {
+                                preferred_distance = 15 + (distance / (Math.abs(ball.dx) + Math.abs(ball.dy)));
+                            }
+
+                            if (player_y_center+preferred_distance < ball_y_center) {
+                                ai.controls.up = false;
+                                ai.controls.down = true;
+                            } else if (player_y_center-preferred_distance > ball_y_center) {
+                                ai.controls.up = true;
+                                ai.controls.down = false;
+                            } else {
+                                ai.controls.up = false;
+                                ai.controls.down = false;
+                            }
+                        }
+
+                        ball.updatePosition();
+                    }
+                }
+
+                draw();
+            }
+
+            // loads the font and then starts the game
+            myFont.load().then((font) => {
+                document.fonts.add(font);
+                setInterval(mainLoop, 10);
+            });
+        </script>
+    </body>
+</html>
