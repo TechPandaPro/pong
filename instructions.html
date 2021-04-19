@@ -35,7 +35,8 @@
                 margin-bottom: 40px;
             }
         </style>
-        <p id="return"><a href="/pong">Click here to return to Pong</a></p>
+        <p id="return"><a href="javascript:(window.location.href=\"/pong\")">Click here to return to Pong</a></p>
+        <!--I use JavaScript here because it seems to automatically include /index.html in the redirect if I don't. I don't want the /index.html part of the link when you click it so I used JavaScript as a simple workaround-->
         <div class="instructions">
             <h1>About</h1>
             <p>Pong is one of the very first computer games ever made. In this remake, you have the ability to play against an AI or against someone that has access to the same keyboard as you.</p>
