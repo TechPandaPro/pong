@@ -3,7 +3,26 @@
     <head>
         <title>Pong</title>
     </head>
-    <body style="background-color:#b5b8c7">
+    <body>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Press+Start+2P">
+        <style>
+            body {
+                background-color: #b5b8c7;
+                margin-top: 20px;
+            }
+            a:link, a:visited {
+                color: blue;
+            }
+            a:link:active, a:visited:active {
+                color: purple;
+            }
+            #instructions {
+                font-family: "Press Start 2P";
+                text-align: center;
+                margin-bottom: 20px;
+            }
+        </style>
+        <p id="instructions"><a href="instructions.html">Can't figure out how to play? Click here for instructions!</a><br><br><span style="font-size:13px">(H to hide)</span></p>
         <canvas id="myCanvas" width="550" height="400" style="background-color:#000000;display:block;margin:0 auto"></canvas>
         <script>
             // defines the font
@@ -180,7 +199,9 @@
             document.addEventListener("keyup", keyUpHandler);
 
             function keyDownHandler(e) {
-                if (selected_mode == null) {
+                if (e.key.toLowerCase() == "h" && document.getElementById("instructions")) {
+                    document.getElementById("instructions").remove();
+                } else if (selected_mode == null) {
                     if (e.key == "1") {
                         selected_mode = 1;
                     } else if (e.key == "2") {
